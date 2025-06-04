@@ -1,0 +1,224 @@
+<!-- WxLoginComponent.vue -->
+<template>
+    <view class="wx-login-component">
+      <!-- 未登录状态 -->
+      <view v-if="!isLoggedIn" class="login-container">
+        <button 
+          class="login-btn"
+          :loading="loading"
+          @click="handleLogin"
+        >
+          {{ loading ? '登录中...' : '微信登录' }}
+        </button>
+        
+        <!-- 错误提示 -->
+        <view v-if="loginError" class="error-message">
+          {{ loginError }}
+        </view>
+      </view>
+  
+      <!-- 已登录状态 -->
+      <view v-else class="user-info">
+        <image 
+          class="avatar"
+          :src="userInfo.avatarUrl"
+          mode="aspectFill"
+        />
+        <text class="nickname">{{ userInfo.nickName }}</text>
+        <button 
+          class="logout-btn"
+          @click="logout"
+        >
+          退出登录
+        </button>
+      </view>
+    </view>
+  </template>
+  <script>
+      // WxLoginComponent.js
+  export default {
+    name: 'WxLoginComponent',
+    
+    data() {
+      return {
+        loading: false,
+        userInfo: null,
+        isLoggedIn: false,
+        loginError: null
+      }
+    },
+  
+    methods: {
+      // 处理登录
+      async handleLogin() {
+        try {
+          this.loading = true
+          this.loginError = null
+  
+          // 1. 获取用户信息
+          const userInfo = await this.getUserProfile()
+          
+          // 2. 获取登录凭证
+          const loginResult = await this.wxLogin()
+          
+          // 3. 发送登录请求
+          const loginResponse = await this.requestLogin({
+            code: loginResult.code,
+            userInfo
+          })
+  
+          // 4. 保存登录状态
+          this.saveLoginState(loginResponse)
+  
+          // 5. 触发成功回调
+          this.$emit('login-success', loginResponse)
+  
+        } catch (error) {
+          this.loginError = error.message
+          this.$emit('login-error', error)
+        } finally {
+          this.loading = false
+        }
+      },
+  
+      // 获取用户信息
+      getUserProfile() {
+        return new Promise((resolve, reject) => {
+          uni.getUserProfile({
+            desc: '用于完善用户资料',
+            success: (res) => {
+              this.userInfo = res.userInfo
+              resolve(res.userInfo)
+            },
+            fail: (err) => {
+              reject(new Error('获取用户信息失败'))
+            }
+          })
+        })
+      },
+  
+      // 微信登录
+      wxLogin() {
+        return new Promise((resolve, reject) => {
+          uni.login({
+            success: (res) => {
+              resolve(res)
+            },
+            fail: (err) => {
+              reject(new Error('微信登录失败'))
+            }
+          })
+        })
+      },
+  
+      // 发送登录请求
+      async requestLogin(data) {
+        try {
+          const response = await uni.request({
+            url: '/api/auth/login',
+            method: 'POST',
+            data
+          })
+          return response.data
+        } catch (error) {
+          throw new Error('登录请求失败')
+        }
+      },
+  
+      // 保存登录状态
+      saveLoginState(data) {
+        // 保存token
+        uni.setStorageSync('token', data.token)
+        // 保存用户信息
+        uni.setStorageSync('userInfo', data.userInfo)
+        // 更新登录状态
+        this.isLoggedIn = true
+      },
+  
+      // 检查登录状态
+      checkLoginState() {
+        const token = uni.getStorageSync('token')
+        const userInfo = uni.getStorageSync('userInfo')
+        
+        if (token && userInfo) {
+          this.isLoggedIn = true
+          this.userInfo = userInfo
+          return true
+        }
+        return false
+      },
+  
+      // 退出登录
+      logout() {
+        uni.removeStorageSync('token')
+        uni.removeStorageSync('userInfo')
+        this.isLoggedIn = false
+        this.userInfo = null
+        this.$emit('logout')
+      }
+    },
+  
+    // 组件生命周期
+    mounted() {
+      // 检查登录状态
+      this.checkLoginState()
+    }
+  }
+  </script>
+  
+  <style lang="scss" scoped>
+  .wx-login-component {
+    padding: 20rpx;
+  
+    .login-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      
+      .login-btn {
+        width: 80%;
+        height: 88rpx;
+        line-height: 88rpx;
+        background: #07c160;
+        color: #fff;
+        border-radius: 44rpx;
+        font-size: 32rpx;
+      }
+  
+      .error-message {
+        margin-top: 20rpx;
+        color: #ff4d4f;
+        font-size: 28rpx;
+      }
+    }
+  
+    .user-info {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      
+      .avatar {
+        width: 128rpx;
+        height: 128rpx;
+        border-radius: 50%;
+        margin-bottom: 20rpx;
+      }
+  
+      .nickname {
+        font-size: 32rpx;
+        color: #333;
+        margin-bottom: 30rpx;
+      }
+  
+      .logout-btn {
+        width: 60%;
+        height: 80rpx;
+        line-height: 80rpx;
+        background: #f5f5f5;
+        color: #666;
+        border-radius: 40rpx;
+        font-size: 28rpx;
+      }
+    }
+  }
+  </style>
